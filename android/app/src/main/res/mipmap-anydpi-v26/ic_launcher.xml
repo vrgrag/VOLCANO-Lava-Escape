@@ -1,9 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Adaptive icon.
+  The foreground PNGs generated from `assets/icon2_foreground.png`
+  already contain their own transparent safe-zone padding (~17% per
+  side), so an additional <inset> wrap would shrink the artwork twice
+  and make the icon appear tiny on the launcher grid.
+  If you re-run `dart run flutter_launcher_icons` and it puts an
+  <inset> back here, strip it manually — this file is the authority.
+-->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-  <background android:drawable="@drawable/ic_launcher_background"/>
-  <foreground>
-      <inset
-          android:drawable="@drawable/ic_launcher_foreground"
-          android:inset="0%" />
-  </foreground>
+    <background android:drawable="@color/ic_launcher_background"/>
+    <foreground android:drawable="@drawable/ic_launcher_foreground"/>
 </adaptive-icon>

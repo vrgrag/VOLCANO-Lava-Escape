@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Obsidian brand colour used by the launch splash and the adaptive
+         icon background. Kept in sync with `AppColors.obsidian`. -->
+    <color name="launch_background">#0D0806</color>
+	<color name="ic_launcher_background">#0D0806</color>
+</resources>

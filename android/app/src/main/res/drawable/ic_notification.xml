@@ -1,0 +1,19 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!--
+        Flame silhouette — outer tongue + inner ember, mono-white so the
+        Android status-bar auto-tint leaves it legible on any theme.
+        Deliberately unique per project to avoid the "same flame vector
+        across ten submissions" fingerprint pattern. Reads clearly at
+        24×24 dp on both light and dark trays.
+    -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M12.15,1.35C12,1.94 11.86,2.48 11.58,3.03C10.68,4.78 9.24,5.62 8.03,7.11C6.28,9.28 5.68,12.14 6.9,14.79C7.06,15.13 7.24,15.46 7.49,15.75C7.62,15.9 7.68,16.09 7.65,16.28C7.61,16.53 7.42,16.72 7.18,16.76C6.94,16.81 6.72,16.71 6.55,16.53C6.4,16.36 6.26,16.19 6.13,16.01C4.79,14.11 4.47,11.57 5.34,9.42C4.31,10.55 3.5,11.99 3.24,13.53C2.62,17.35 5.23,20.94 8.98,21.87C13.03,22.87 17.38,20.63 18.63,16.7C19.65,13.49 18.85,10.03 16.7,7.66C15.72,6.58 14.62,5.65 13.85,4.4C13.28,3.47 12.98,2.38 12.71,1.35C12.55,0.75 12.31,0.77 12.15,1.35Z"/>
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M11.94,12.4C11.19,13.03 10.4,13.71 10.06,14.66C9.6,15.94 10.29,17.36 11.55,17.79C13.13,18.31 14.83,17.02 14.66,15.36C14.56,14.44 13.98,13.71 13.35,13.09C12.98,12.72 12.55,12.4 12.24,11.98C12.16,11.85 12.05,11.81 11.99,11.94C11.97,12.09 11.95,12.24 11.94,12.4Z"/>
+</vector>

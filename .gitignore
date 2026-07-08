@@ -46,3 +46,10 @@ app.*.map.json
 
 # Packaged release build outputs (regenerate via flutter build apk/appbundle)
 /releases/
+
+# Secrets — never commit real Firebase config, keystore or debug info
+/android/app/google-services.json
+/android/keystore/key.properties
+/android/keystore/*.jks
+/android/keystore/*.keystore
+/build/debug_info/

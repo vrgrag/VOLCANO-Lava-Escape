@@ -1,12 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Modify this file to customize your launch splash screen -->
+<!--
+    Full-bleed obsidian splash. Kills the white window-background flash
+    that Android draws while Flutter initialises (pitfalls §16). We do
+    NOT layer the launcher icon on top — that pattern shows a rectangular
+    frame around the icon on cold start.
+-->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@android:color/white" />
-
-    <!-- You can insert your own image assets here -->
-    <!-- <item>
-        <bitmap
-            android:gravity="center"
-            android:src="@mipmap/launch_image" />
-    </item> -->
+    <item android:drawable="@color/launch_background"/>
 </layer-list>

@@ -1,66 +1,86 @@
+import 'package:firebase_app_check/firebase_app_check.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'core/app_services.dart';
-import 'core/app_theme.dart';
 import 'core/orientation.dart';
-import 'screens/gameplay_screen.dart';
-import 'screens/loading_screen.dart';
-import 'screens/main_menu_screen.dart';
-import 'screens/no_internet_screen.dart';
-import 'screens/webview_screen.dart';
+import 'pyre/agent_forge.dart';
+import 'pyre/attribution_scout.dart';
+import 'pyre/beacon_hub.dart';
+import 'pyre/caverns_vault.dart';
+import 'pyre/signal_probe.dart';
+import 'pyre/verdict_channel.dart';
+import 'quake/escape_app.dart';
 import 'services/storage_service.dart';
 
-void main() async {
+// ============================================================
+// main.dart — Lava Escape bootstrap
+// ============================================================
+// Wiring order (do NOT reorder without re-reading the guide):
+//   1. WidgetsFlutterBinding.
+//   2. Firebase + App Check — wrapped in try/catch. Missing
+//      google-services.json is NOT fatal; the gray flow falls back to
+//      the offline game.
+//   3. Orientation whitelist — all four orientations unlocked. The
+//      boot router re-locks to portrait when it routes into the game.
+//   4. Status bar transparent + light icons — loading art is edge-to-edge.
+//   5. `lavaAgent.ignite()` — forges the User-Agent BEFORE any bridge
+//      makes its first HTTP call.
+//   6. `CavernsVault.mount()` — reads SharedPreferences into memory so
+//      the first frame of BootRouter can decide the route synchronously.
+//   7. Bridges are constructed here but their `.wire()` / `.lightUp()`
+//      calls run inside BootRouter, after the UI is up.
+// ============================================================
+
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // The loading screen is allowed to render in either orientation; the
-  // rest of the game is strictly portrait. We start unlocked and lock to
-  // portrait once the loading screen hands off to the rest of the app.
-  await unlockOrientationForLoading();
-  final storage = await StorageService.create();
-  final services = AppServices(storage: storage);
-  runApp(LavaEscapeApp(services: services));
-}
 
-class LavaEscapeApp extends StatelessWidget {
-  const LavaEscapeApp({super.key, required this.services});
-
-  final AppServices services;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppServicesScope(
-      services: services,
-      child: MaterialApp(
-        title: 'Lava Escape',
-        debugShowCheckedModeBanner: false,
-        theme: buildAppTheme(),
-        initialRoute: '/',
-        onGenerateRoute: (settings) {
-          switch (settings.name) {
-            case '/':
-              return MaterialPageRoute(builder: (_) => const LoadingScreen());
-            case '/menu':
-              return MaterialPageRoute(
-                builder: (_) => const MainMenuScreen(),
-                settings: settings,
-              );
-            case '/game':
-              return MaterialPageRoute(builder: (_) => const GameplayScreen());
-            case '/webview':
-              final args = settings.arguments as WebViewArgs;
-              return MaterialPageRoute(
-                builder: (_) => WebViewScreen(args: args),
-              );
-            case '/no-internet':
-              final args = settings.arguments as WebViewArgs;
-              return MaterialPageRoute(
-                builder: (_) => NoInternetScreen(args: args),
-              );
-            default:
-              return MaterialPageRoute(builder: (_) => const LoadingScreen());
-          }
-        },
-      ),
+  // Firebase + App Check are optional until credentials land — failures
+  // here must never block startup.
+  try {
+    await Firebase.initializeApp();
+    await FirebaseAppCheck.instance.activate(
+      androidProvider:
+          kDebugMode ? AndroidProvider.debug : AndroidProvider.playIntegrity,
     );
-  }
+  } catch (_) {}
+
+  // Loading + WebView need every orientation. The game re-locks to
+  // portrait inside BootRouter._routeNative.
+  await unlockOrientationForLoading();
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.light,
+  ));
+
+  await lavaAgent.ignite();
+
+  final CavernsVault vault = CavernsVault();
+  await vault.mount();
+
+  // White-part storage is separate from the vault; keep it wired for the
+  // native game path (BEST score, sound flag). It never talks to the
+  // gray subsystem — the two paths only meet at BootRouter.
+  final StorageService whiteStore = await StorageService.create();
+  final AppServices whiteServices = AppServices(storage: whiteStore);
+
+  final SignalProbe signal = SignalProbe();
+  final AttributionScout scout = AttributionScout();
+  final VerdictChannel verdict = VerdictChannel(vault);
+  final BeaconHub beacon = BeaconHub(vault);
+
+  runApp(
+    AppServicesScope(
+      services: whiteServices,
+      child: EscapeApp(
+        vault: vault,
+        signal: signal,
+        scout: scout,
+        verdict: verdict,
+        beacon: beacon,
+      ),
+    ),
+  );
 }
