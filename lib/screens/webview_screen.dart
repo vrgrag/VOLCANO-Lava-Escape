@@ -33,7 +33,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
     super.initState();
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(AppColors.obsidian)
+      ..setBackgroundColor(Colors.white)
       ..setNavigationDelegate(
         NavigationDelegate(
           onProgress: (progress) {
@@ -76,6 +76,7 @@ class _WebViewScreenState extends State<WebViewScreen> {
                     : Container(
                         margin: const EdgeInsets.fromLTRB(12, 8, 12, 12),
                         decoration: BoxDecoration(
+                          color: Colors.white,
                           borderRadius: BorderRadius.circular(18),
                           border: Border.all(
                             color: Colors.black.withValues(alpha: 0.5),

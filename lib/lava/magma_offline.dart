@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'magma_button.dart';
 
@@ -32,8 +33,33 @@ class MagmaOffline extends StatefulWidget {
   State<MagmaOffline> createState() => _MagmaOfflineState();
 }
 
-class _MagmaOfflineState extends State<MagmaOffline> {
+class _MagmaOfflineState extends State<MagmaOffline>
+    with WidgetsBindingObserver {
   bool _reconnecting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _hideHud();
+  }
+
+  // Immersive-sticky removes the top/bottom system strips so the
+  // "no wifi" artwork fills the full display, matching the WebView shell.
+  void _hideHud() {
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _hideHud();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
 
   Future<void> _reconnect() async {
     if (_reconnecting) return;
@@ -54,16 +80,17 @@ class _MagmaOfflineState extends State<MagmaOffline> {
         ? EdgeInsets.only(
             left: mq.viewPadding.left,
             right: mq.viewPadding.right,
-            top: mq.viewPadding.top,
           )
-        : EdgeInsets.only(top: mq.viewPadding.top);
+        : EdgeInsets.zero;
 
     final double buttonWidth = landscape
-        ? size.width * 0.35
+        ? (size.width * 0.35).clamp(220.0, 380.0)
         : (size.width * 0.68).clamp(220.0, 380.0);
 
     return Scaffold(
       backgroundColor: const Color(0xFF0D0806),
+      extendBody: true,
+      extendBodyBehindAppBar: true,
       body: Stack(
         fit: StackFit.expand,
         children: <Widget>[
@@ -76,7 +103,7 @@ class _MagmaOfflineState extends State<MagmaOffline> {
               gradient: LinearGradient(
                 begin: Alignment.center,
                 end: Alignment.bottomCenter,
-                colors: <Color>[Colors.transparent, Color(0xAA000000)],
+                colors: <Color>[Colors.transparent, Color(0x66000000)],
               ),
             ),
           ),

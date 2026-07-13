@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
@@ -14,6 +16,7 @@ import 'pyre/signal_probe.dart';
 import 'pyre/verdict_channel.dart';
 import 'quake/escape_app.dart';
 import 'services/storage_service.dart';
+import 'wire/route_mode.dart';
 
 // ============================================================
 // main.dart — Lava Escape bootstrap
@@ -70,6 +73,22 @@ Future<void> main() async {
   final AttributionScout scout = AttributionScout();
   final VerdictChannel verdict = VerdictChannel(vault);
   final BeaconHub beacon = BeaconHub(vault);
+
+  // Persistent token-rotation handler — outlives BootRouter so a token
+  // that only arrives after the shell has already handed off to the
+  // WebView still triggers a re-POST of the config request. Without
+  // this, notifications silently fail after an offline→retry cycle
+  // because the backend never receives the token.
+  beacon.onFreshToken = (String token) async {
+    if (vault.currentMode() != RouteMode.escape) return;
+    try {
+      final Map<String, dynamic> body = await scout.composeGateBody(
+        locale: Platform.localeName.replaceAll('-', '_'),
+        pushToken: token,
+      );
+      await verdict.query(body);
+    } catch (_) {}
+  };
 
   runApp(
     AppServicesScope(

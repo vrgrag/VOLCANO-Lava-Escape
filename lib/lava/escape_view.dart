@@ -86,6 +86,14 @@ class _EscapeViewState extends State<EscapeView>
     };
 
     _tx = widget.signal.transportChanges.listen(_onTransportChange);
+
+    // Best-effort push recovery: if the very first `beacon.wire()`
+    // happened while offline (or Play Services stalled), the FCM token
+    // is still null and the backend never learned who to notify. A
+    // token nudge is safe to run concurrently with the router's own
+    // wire() call — the token-rotation handler installed in main.dart
+    // will forward the fresh token to the verdict channel.
+    unawaited(widget.beacon.nudgeToken());
   }
 
   void _dive() {
@@ -97,7 +105,12 @@ class _EscapeViewState extends State<EscapeView>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _dive();
+    if (state == AppLifecycleState.resumed) {
+      _dive();
+      // A backgrounded app may have missed FCM handshakes; re-arm on
+      // resume so silent notification failures self-heal.
+      unawaited(widget.beacon.nudgeToken());
+    }
   }
 
   void _onTransportChange(List<ConnectivityResult> tx) {

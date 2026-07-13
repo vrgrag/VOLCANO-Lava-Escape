@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../pyre/beacon_hub.dart';
 import '../pyre/caverns_vault.dart';
@@ -22,7 +23,7 @@ import 'magma_button.dart';
 // baked in — the artwork carries all the copy).
 // ============================================================
 
-class NotifyPrompt extends StatelessWidget {
+class NotifyPrompt extends StatefulWidget {
   const NotifyPrompt({
     super.key,
     required this.vault,
@@ -42,31 +43,61 @@ class NotifyPrompt extends StatelessWidget {
   final String portraitAsset;
   final String landscapeAsset;
 
-  Future<void> _onAccept(BuildContext context) async {
-    final bool granted = await beacon.askPermission();
-    if (!granted) {
-      await vault.stashInviteCooldown(_cooldownUntil());
-    }
-    if (context.mounted) _forwardToView(context);
+  @override
+  State<NotifyPrompt> createState() => _NotifyPromptState();
+}
+
+class _NotifyPromptState extends State<NotifyPrompt>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _hideHud();
   }
 
-  Future<void> _onSkip(BuildContext context) async {
-    await vault.stashInviteCooldown(_cooldownUntil());
-    if (context.mounted) _forwardToView(context);
+  // Immersive-sticky matches the WebView shell: no status/nav strips
+  // frame the artwork, so the volcano background reaches every edge.
+  void _hideHud() {
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _hideHud();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  Future<void> _onAccept() async {
+    final bool granted = await widget.beacon.askPermission();
+    if (!granted) {
+      await widget.vault.stashInviteCooldown(_cooldownUntil());
+    }
+    if (mounted) _forwardToView();
+  }
+
+  Future<void> _onSkip() async {
+    await widget.vault.stashInviteCooldown(_cooldownUntil());
+    if (mounted) _forwardToView();
   }
 
   int _cooldownUntil() =>
       (DateTime.now().millisecondsSinceEpoch ~/ 1000) +
       EscapeIdentity.inviteCooldownSeconds;
 
-  void _forwardToView(BuildContext context) {
+  void _forwardToView() {
     Navigator.of(context).pushReplacement(
       MaterialPageRoute<void>(
         builder: (_) => EscapeView(
-          entryUrl: contentUrl,
-          vault: vault,
-          beacon: beacon,
-          signal: signal,
+          entryUrl: widget.contentUrl,
+          vault: widget.vault,
+          beacon: widget.beacon,
+          signal: widget.signal,
         ),
       ),
     );
@@ -77,25 +108,28 @@ class NotifyPrompt extends StatelessWidget {
     final MediaQueryData mq = MediaQuery.of(context);
     final Size size = mq.size;
     final bool landscape = mq.orientation == Orientation.landscape;
-    final EdgeInsets safe = landscape
-        ? EdgeInsets.only(
-            left: mq.viewPadding.left,
-            right: mq.viewPadding.right,
-            top: mq.viewPadding.top,
-          )
-        : EdgeInsets.only(top: mq.viewPadding.top);
 
     final double primaryWidth = landscape
-        ? size.width * 0.34
+        ? (size.width * 0.34).clamp(200.0, 360.0)
         : (size.width * 0.66).clamp(220.0, 380.0);
+
+    // Pin the button pair to the bottom of the visible area, centered
+    // horizontally, so they sit UNDER the banner artwork on every
+    // aspect ratio rather than overlapping the "Stay tuned…" caption.
+    // Landscape has less vertical room, so the bottom offset shrinks.
+    final double bottomOffset = landscape
+        ? size.height * 0.05
+        : size.height * 0.08;
 
     return Scaffold(
       backgroundColor: const Color(0xFF0D0806),
+      extendBody: true,
+      extendBodyBehindAppBar: true,
       body: Stack(
         fit: StackFit.expand,
         children: <Widget>[
           Image.asset(
-            landscape ? landscapeAsset : portraitAsset,
+            landscape ? widget.landscapeAsset : widget.portraitAsset,
             fit: BoxFit.cover,
           ),
           const DecoratedBox(
@@ -103,43 +137,36 @@ class NotifyPrompt extends StatelessWidget {
               gradient: LinearGradient(
                 begin: Alignment.center,
                 end: Alignment.bottomCenter,
-                colors: <Color>[Colors.transparent, Color(0xAA000000)],
+                colors: <Color>[Colors.transparent, Color(0x66000000)],
               ),
             ),
           ),
-          Padding(
-            padding: safe,
-            child: Stack(
-              children: <Widget>[
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: landscape
-                      ? size.height * 0.07
-                      : size.height * 0.08,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      MagmaButton(
-                        label: 'ACCEPT',
-                        width: primaryWidth,
-                        height: landscape ? 48 : 56,
-                        onTap: () => _onAccept(context),
-                      ),
-                      SizedBox(height: landscape ? 12 : 16),
-                      MagmaButton(
-                        label: 'SKIP',
-                        tone: MagmaTone.secondary,
-                        width: primaryWidth,
-                        height: landscape ? 44 : 50,
-                        onTap: () => _onSkip(context),
-                      ),
-                    ],
-                  ),
+          Align(
+            alignment: Alignment.bottomCenter,
+            child: Padding(
+                padding: EdgeInsets.only(bottom: bottomOffset),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: <Widget>[
+                    MagmaButton(
+                      label: 'ACCEPT',
+                      width: primaryWidth,
+                      height: landscape ? 48 : 56,
+                      onTap: _onAccept,
+                    ),
+                    SizedBox(height: landscape ? 10 : 14),
+                    MagmaButton(
+                      label: 'SKIP',
+                      tone: MagmaTone.secondary,
+                      width: primaryWidth,
+                      height: landscape ? 42 : 50,
+                      onTap: _onSkip,
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
-          ),
         ],
       ),
     );

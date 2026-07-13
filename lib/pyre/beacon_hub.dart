@@ -46,7 +46,21 @@ class BeaconHub {
       FlutterLocalNotificationsPlugin();
   FirebaseMessaging? _fm;
   String? _token;
-  bool _wired = false;
+  // Split the "wire" idempotency into TWO flags:
+  //   • [_channelReady] — local notif channel + native listeners; safe to
+  //     do once for the process lifetime.
+  //   • [_tokenReady]   — we hold a non-null FCM token AND have posted at
+  //     least one token to the on-fresh listeners. If getToken() failed
+  //     (offline / Play Services stalled), we keep retrying on every
+  //     subsequent wire() so the app self-heals after the user reconnects.
+  bool _channelReady = false;
+  bool _tokenReady = false;
+  // In-flight guards. Multiple callers (BootRouter + EscapeView + resume
+  // handler) can hit wire()/nudgeToken() simultaneously; without these
+  // we would re-register FCM listeners twice, which throws on Firebase
+  // 15.x and silently stalls the rest of startup.
+  Future<void>? _wireInFlight;
+  Future<void>? _pullInFlight;
 
   /// Warm-tap sink. When the user taps a notification while the app is
   /// alive, the URL is delivered here — the WebView loads it live.
@@ -58,42 +72,76 @@ class BeaconHub {
 
   String? get token => _token;
 
-  Future<void> wire() async {
-    if (_wired) return;
+  Future<void> wire() {
+    return _wireInFlight ??= _runWire().whenComplete(() {
+      _wireInFlight = null;
+    });
+  }
+
+  Future<void> _runWire() async {
     try {
       if (Firebase.apps.isEmpty) {
         await Firebase.initializeApp();
       }
-      _fm = FirebaseMessaging.instance;
-      FirebaseMessaging.onBackgroundMessage(_backdropHandler);
+      _fm ??= FirebaseMessaging.instance;
 
-      await _bootLocal();
+      if (!_channelReady) {
+        FirebaseMessaging.onBackgroundMessage(_backdropHandler);
+        await _bootLocal();
 
-      // Cap `getToken()` — Play Services can stall it for minutes when
-      // the device just came online or is behind a captive portal.
-      // A missing token here is fine: the token-refresh callback below
-      // re-POSTs the gate the moment FCM delivers one.
-      _token = await _fm!.getToken().timeout(
-        const Duration(seconds: 6),
-        onTimeout: () => null,
-      );
-      _fm!.onTokenRefresh.listen((String t) {
-        _token = t;
-        onFreshToken?.call(t);
-      });
+        _fm!.onTokenRefresh.listen((String t) {
+          _token = t;
+          _tokenReady = true;
+          onFreshToken?.call(t);
+        });
+        FirebaseMessaging.onMessage.listen(_onForeground);
+        FirebaseMessaging.onMessageOpenedApp.listen(_onWarmOpen);
 
-      FirebaseMessaging.onMessage.listen(_onForeground);
-      FirebaseMessaging.onMessageOpenedApp.listen(_onWarmOpen);
+        final RemoteMessage? cold = await _fm!.getInitialMessage();
+        if (cold != null) _onColdOpen(cold);
 
-      final RemoteMessage? cold = await _fm!.getInitialMessage();
-      if (cold != null) _onColdOpen(cold);
+        _channelReady = true;
+      }
 
-      _wired = true;
+      // Always attempt a token refresh when wire() is invoked — this is
+      // how the WebView / retry path recovers from an initial offline
+      // wire() where getToken() returned null.
+      if (!_tokenReady) await _pullToken();
     } catch (_) {
       // Firebase not configured yet — push subsystem stays dormant and
-      // the shell keeps working.
+      // the shell keeps working. Next wire() call will retry.
     }
   }
+
+  Future<void> _pullToken() {
+    return _pullInFlight ??= _runPullToken().whenComplete(() {
+      _pullInFlight = null;
+    });
+  }
+
+  Future<void> _runPullToken() async {
+    if (_fm == null) return;
+    try {
+      // Cap `getToken()` — Play Services can stall it for minutes when
+      // the device just came online or is behind a captive portal. A
+      // null here is fine: retry on the next `wire()` / `nudgeToken()`.
+      final String? fresh = await _fm!.getToken().timeout(
+            const Duration(seconds: 6),
+            onTimeout: () => null,
+          );
+      if (fresh == null || fresh.isEmpty) return;
+      final bool changed = fresh != _token;
+      _token = fresh;
+      _tokenReady = true;
+      if (changed) onFreshToken?.call(fresh);
+    } catch (_) {}
+  }
+
+  /// Public opportunistic re-fetch. Called from screens that resume
+  /// (WebView, offline retry) so the backend eventually sees the token
+  /// even if the very first `wire()` happened before the device had a
+  /// working data path to FCM.
+  Future<void> nudgeToken() => _pullToken();
 
   Future<void> _bootLocal() async {
     const AndroidInitializationSettings android =

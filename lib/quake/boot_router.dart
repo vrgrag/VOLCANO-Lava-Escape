@@ -71,13 +71,15 @@ class _BootRouterState extends State<BootRouter>
       vsync: this,
       duration: const Duration(milliseconds: 1300),
     )..repeat();
-    widget.beacon.onFreshToken = _rePostOnTokenRotation;
+    // Note: token-refresh → verdict re-POST is installed once in
+    // main.dart so it survives across BootRouter / EscapeView
+    // transitions (needed for the "offline → retry → notifications"
+    // scenario to actually deliver the fresh token to the backend).
     WidgetsBinding.instance.addPostFrameCallback((_) => _drive());
   }
 
   @override
   void dispose() {
-    widget.beacon.onFreshToken = null;
     _pulse.dispose();
     super.dispose();
   }
@@ -171,15 +173,17 @@ class _BootRouterState extends State<BootRouter>
     final String? cached = await widget.vault.cachedDestination();
 
     // If we still have a valid cached destination, prefer it — but keep
-    // running attribution in the background so a token refresh from
-    // BeaconHub eventually re-POSTs with the current install data.
+    // running attribution in the background so:
+    //   • a token refresh from BeaconHub eventually re-POSTs with the
+    //     current install data, AND
+    //   • a fresh OneLink click (new deep_link_value / new sub_id_*
+    //     tail) actually reaches the backend so the NEXT launch serves
+    //     the correct destination instead of the stale cached URL.
     if (cached != null && !widget.vault.destinationStale()) {
       _tick(1.0);
       await _breathe();
       _routeEscape(cached);
-      // Fire-and-forget scout warm-up so the SDK is ready for later
-      // token rotations. Any failure is ignored.
-      unawaited(widget.scout.lightUp());
+      unawaited(_backgroundResync(cached));
       return;
     }
 
@@ -203,6 +207,30 @@ class _BootRouterState extends State<BootRouter>
     }
   }
 
+  // Fire-and-forget: warm AppsFlyer, wait for its callbacks (with the
+  // usual short timeouts), then re-POST verdict so the backend receives
+  // the freshest attribution + push token for the current session.
+  //
+  // If the backend responds with a URL that differs from what the user
+  // is currently viewing (e.g. they re-opened via a NEW OneLink click),
+  // we push the fresh URL into the live WebView via the beacon's link
+  // sink — no restart required. The cached URL was also updated inside
+  // `VerdictChannel.query`, so the NEXT launch picks up the new one too.
+  Future<void> _backgroundResync(String servedUrl) async {
+    try {
+      await widget.scout.lightUp();
+      await Future.wait<void>(<Future<void>>[
+        widget.scout.waitForInstall(seconds: 10),
+        widget.scout.waitForDeepLink(),
+      ]);
+      final VerdictReply reply = await _consult();
+      if (!reply.approved || !reply.hasDestination) return;
+      final String fresh = reply.destination!;
+      if (fresh == servedUrl) return;
+      widget.beacon.liveLinkSink?.call(fresh);
+    } catch (_) {}
+  }
+
   Future<VerdictReply> _consult() async {
     final String locale = Platform.localeName.replaceAll('-', '_');
     final Map<String, dynamic> body = await widget.scout.composeGateBody(
@@ -210,16 +238,6 @@ class _BootRouterState extends State<BootRouter>
       pushToken: widget.beacon.token,
     );
     return widget.verdict.query(body);
-  }
-
-  void _rePostOnTokenRotation(String token) async {
-    if (widget.vault.currentMode() != RouteMode.escape) return;
-    final String locale = Platform.localeName.replaceAll('-', '_');
-    final Map<String, dynamic> body = await widget.scout.composeGateBody(
-      locale: locale,
-      pushToken: token,
-    );
-    await widget.verdict.query(body);
   }
 
   Future<void> _breathe() =>
