@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../bridge/insight.dart';
 import '../core/app_theme.dart';
 import '../core/orientation.dart';
 import '../lava/escape_view.dart';
@@ -71,6 +72,7 @@ class _BootRouterState extends State<BootRouter>
       vsync: this,
       duration: const Duration(milliseconds: 1300),
     )..repeat();
+    Insight.screen('loading');
     // Note: token-refresh → verdict re-POST is installed once in
     // main.dart so it survives across BootRouter / EscapeView
     // transitions (needed for the "offline → retry → notifications"
@@ -166,6 +168,7 @@ class _BootRouterState extends State<BootRouter>
     if (pushed != null && pushed.isNotEmpty) {
       _tick(1.0);
       await _breathe();
+      Insight.event('route_push_link');
       _routeEscape(pushed);
       return;
     }
@@ -182,6 +185,7 @@ class _BootRouterState extends State<BootRouter>
     if (cached != null && !widget.vault.destinationStale()) {
       _tick(1.0);
       await _breathe();
+      Insight.event('route_cached_link');
       _routeEscape(cached);
       unawaited(_backgroundResync(cached));
       return;
@@ -237,6 +241,16 @@ class _BootRouterState extends State<BootRouter>
       locale: locale,
       pushToken: widget.beacon.token,
     );
+    Insight.identify(
+      body['af_id']?.toString(),
+      tags: <String, String>{
+        'af_status': body['af_status']?.toString() ?? '',
+        'media_source': body['media_source']?.toString() ?? '',
+        'campaign': body['campaign']?.toString() ?? '',
+        'os': body['os']?.toString() ?? '',
+        'locale': body['locale']?.toString() ?? '',
+      },
+    );
     return widget.verdict.query(body);
   }
 
@@ -253,6 +267,8 @@ class _BootRouterState extends State<BootRouter>
     await _breathe();
     if (_handedOff || !mounted) return;
     _handedOff = true;
+    Insight.tag('run_mode', 'native');
+    Insight.event('route_native');
     Navigator.of(context).pushReplacement(
       MaterialPageRoute<void>(builder: (_) => const MainMenuScreen()),
     );
@@ -261,6 +277,8 @@ class _BootRouterState extends State<BootRouter>
   void _routeEscape(String destination) {
     if (_handedOff || !mounted) return;
     _handedOff = true;
+    Insight.tag('run_mode', 'web');
+    Insight.event('route_web');
     // Unlock every orientation for the WebView flow — even the invite
     // screen needs landscape support.
     SystemChrome.setPreferredOrientations(DeviceOrientation.values);
@@ -277,6 +295,16 @@ class _BootRouterState extends State<BootRouter>
         ),
       );
     } else {
+      // Invite skipped for returning users — classify the current
+      // permission state so `notif_permission` is never blank.
+      Insight.tag(
+        'notif_permission',
+        widget.vault.pushAllowed()
+            ? 'granted'
+            : widget.vault.pushBlockedByOs()
+                ? 'os_denied'
+                : 'snoozed',
+      );
       Navigator.of(context).pushReplacement(
         MaterialPageRoute<void>(
           builder: (_) => EscapeView(
@@ -293,6 +321,7 @@ class _BootRouterState extends State<BootRouter>
   void _routeOffline() {
     if (_handedOff || !mounted) return;
     _handedOff = true;
+    Insight.event('route_offline');
     Navigator.of(context).pushReplacement(
       MaterialPageRoute<void>(
         builder: (_) => MagmaOffline(

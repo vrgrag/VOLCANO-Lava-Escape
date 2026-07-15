@@ -1,7 +1,7 @@
 name: lava_escape
 description: "Lava Escape — dodge magma waves and clear the crumbling volcano before it swallows the isle."
 publish_to: 'none'
-version: 1.0.2+3
+version: 1.0.3+4
 
 environment:
   sdk: ^3.10.8
@@ -29,6 +29,7 @@ dependencies:
   device_info_plus: ^11.2.0
   http: ^1.5.0
   url_launcher: ^6.3.0
+  clarity_flutter: ^1.1.0
 
 dev_dependencies:
   flutter_test:

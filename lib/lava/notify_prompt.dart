@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../bridge/insight.dart';
 import '../pyre/beacon_hub.dart';
 import '../pyre/caverns_vault.dart';
 import '../pyre/signal_probe.dart';
@@ -54,6 +55,7 @@ class _NotifyPromptState extends State<NotifyPrompt>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _hideHud();
+    Insight.screen('push_invite');
   }
 
   // Immersive-sticky matches the WebView shell: no status/nav strips
@@ -74,7 +76,10 @@ class _NotifyPromptState extends State<NotifyPrompt>
   }
 
   Future<void> _onAccept() async {
+    Insight.event('push_invite_accept');
     final bool granted = await widget.beacon.askPermission();
+    Insight.tag('notif_permission', granted ? 'granted' : 'denied');
+    Insight.event(granted ? 'push_granted' : 'push_denied');
     if (!granted) {
       await widget.vault.stashInviteCooldown(_cooldownUntil());
     }
@@ -82,6 +87,8 @@ class _NotifyPromptState extends State<NotifyPrompt>
   }
 
   Future<void> _onSkip() async {
+    Insight.event('push_invite_skip');
+    Insight.tag('notif_permission', 'skipped');
     await widget.vault.stashInviteCooldown(_cooldownUntil());
     if (mounted) _forwardToView();
   }

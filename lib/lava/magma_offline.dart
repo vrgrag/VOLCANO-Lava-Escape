@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../bridge/insight.dart';
 import 'magma_button.dart';
 
 // ============================================================
@@ -42,6 +43,7 @@ class _MagmaOfflineState extends State<MagmaOffline>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _hideHud();
+    Insight.screen('offline');
   }
 
   // Immersive-sticky removes the top/bottom system strips so the
@@ -63,6 +65,7 @@ class _MagmaOfflineState extends State<MagmaOffline>
 
   Future<void> _reconnect() async {
     if (_reconnecting) return;
+    Insight.event('offline_retry');
     setState(() => _reconnecting = true);
     await Future<void>.delayed(const Duration(milliseconds: 550));
     if (!mounted) return;
@@ -76,13 +79,6 @@ class _MagmaOfflineState extends State<MagmaOffline>
     final MediaQueryData mq = MediaQuery.of(context);
     final Size size = mq.size;
     final bool landscape = mq.orientation == Orientation.landscape;
-    final EdgeInsets safe = landscape
-        ? EdgeInsets.only(
-            left: mq.viewPadding.left,
-            right: mq.viewPadding.right,
-          )
-        : EdgeInsets.zero;
-
     final double buttonWidth = landscape
         ? (size.width * 0.35).clamp(220.0, 380.0)
         : (size.width * 0.68).clamp(220.0, 380.0);
@@ -107,35 +103,28 @@ class _MagmaOfflineState extends State<MagmaOffline>
               ),
             ),
           ),
-          Padding(
-            padding: safe,
-            child: Stack(
-              children: <Widget>[
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: landscape ? size.height * 0.10 : size.height * 0.09,
-                  child: Center(
-                    child: _reconnecting
-                        ? const SizedBox(
-                            width: 40,
-                            height: 40,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 3,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                Color(0xFFFF8B2C),
-                              ),
-                            ),
-                          )
-                        : MagmaButton(
-                            label: 'RECONNECT',
-                            width: buttonWidth,
-                            height: 54,
-                            onTap: _reconnect,
-                          ),
-                  ),
-                ),
-              ],
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: landscape ? size.height * 0.10 : size.height * 0.09,
+            child: Center(
+              child: _reconnecting
+                  ? const SizedBox(
+                      width: 40,
+                      height: 40,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 3,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          Color(0xFFFF8B2C),
+                        ),
+                      ),
+                    )
+                  : MagmaButton(
+                      label: 'RECONNECT',
+                      width: buttonWidth,
+                      height: 54,
+                      onTap: _reconnect,
+                    ),
             ),
           ),
         ],

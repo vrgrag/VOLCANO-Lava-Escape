@@ -1,11 +1,13 @@
 import 'dart:io';
 
+import 'package:clarity_flutter/clarity_flutter.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'bridge/insight.dart';
 import 'core/app_services.dart';
 import 'core/orientation.dart';
 import 'pyre/agent_forge.dart';
@@ -91,14 +93,17 @@ Future<void> main() async {
   };
 
   runApp(
-    AppServicesScope(
-      services: whiteServices,
-      child: EscapeApp(
-        vault: vault,
-        signal: signal,
-        scout: scout,
-        verdict: verdict,
-        beacon: beacon,
+    ClarityWidget(
+      clarityConfig: Insight.config,
+      app: AppServicesScope(
+        services: whiteServices,
+        child: EscapeApp(
+          vault: vault,
+          signal: signal,
+          scout: scout,
+          verdict: verdict,
+          beacon: beacon,
+        ),
       ),
     ),
   );

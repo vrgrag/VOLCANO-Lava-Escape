@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../bridge/insight.dart';
 import '../core/app_services.dart';
 import '../core/app_theme.dart';
 import '../game/game_controller.dart';
@@ -31,11 +32,17 @@ class GameplayScreen extends StatefulWidget {
 class _GameplayScreenState extends State<GameplayScreen>
     with WidgetsBindingObserver {
   GameController? _controller;
+  // Guard so `game_over` fires exactly once per run (the controller
+  // notifies on every tick — status can stay `gameOver` across frames).
+  bool _gameOverReported = false;
+  int _lastReportedLevel = -1;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    Insight.screen('game');
+    Insight.event('game_start');
   }
 
   @override
@@ -49,7 +56,28 @@ class _GameplayScreenState extends State<GameplayScreen>
     }
   }
 
-  void _onControllerChanged() => setState(() {});
+  void _onControllerChanged() {
+    final GameController? c = _controller;
+    if (c != null) {
+      if (c.level != _lastReportedLevel) {
+        _lastReportedLevel = c.level;
+        Insight.tag('level', '${c.level}');
+      }
+      if (c.status == GameStatus.gameOver && !_gameOverReported) {
+        _gameOverReported = true;
+        Insight.event('game_over');
+        Insight.tag('final_score', '${c.score}');
+        if (c.isNewBest) Insight.event('game_new_best');
+      }
+      // When the player restarts (either from pause or game-over), the
+      // controller flips back to `showingSequence` — re-arm the reporter.
+      if (c.status != GameStatus.gameOver && _gameOverReported) {
+        _gameOverReported = false;
+        Insight.event('game_restart');
+      }
+    }
+    setState(() {});
+  }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../bridge/insight.dart';
 import '../core/app_services.dart';
 import '../core/app_theme.dart';
 import '../core/assets.dart';
@@ -17,6 +18,12 @@ class MainMenuScreen extends StatefulWidget {
 class _MainMenuScreenState extends State<MainMenuScreen> {
   static const String _privacyUrl = 'https://lavaesscape.com/privacy-policy.html';
   static const String _supportUrl = 'https://lavaesscape.com/support.html';
+
+  @override
+  void initState() {
+    super.initState();
+    Insight.screen('menu');
+  }
 
   Future<void> _openRemote(String title, String url) async {
     final services = AppServicesScope.of(context);
